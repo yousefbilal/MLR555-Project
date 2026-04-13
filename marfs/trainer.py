@@ -429,7 +429,7 @@ class MARFSTrainer:
             self.episode_metrics.append(metrics)
             self.selected_masks_history.append(ep_info["final_mask"])
 
-            if episode % 10 == 0 or episode == self.config.n_episodes - 1:
+            if episode % self.config.log_freq == 0 or episode == self.config.n_episodes - 1:
                 fps = ep_info["episode_steps"] / max(ep_time, 1e-6)
                 print(f"Ep {episode:4d} | R={ep_reward:+.4f} | "
                       f"Acc={ep_info.get('accuracy', 0):.3f} | "

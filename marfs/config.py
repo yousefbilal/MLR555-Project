@@ -82,6 +82,8 @@ class MARFSConfig:
     run_name: Optional[str] = None
     save_dir: str = "results"
     n_eval_seeds: int = 5
+    
+    log_freq: int = 10
 
     def __post_init__(self):
         # Compute state_dim (GCN readout, without agent embedding)

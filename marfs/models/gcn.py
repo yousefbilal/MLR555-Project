@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch_geometric.nn import GCNConv, global_mean_pool
 from torch_geometric.data import Data
+from marfs.utils import safe_corrcoef
 
 
 class StatDescriptor:
@@ -86,8 +87,7 @@ class DynamicGraphBuilder:
         x = torch.tensor(node_features, dtype=torch.float32, device=device)
 
         if n_selected > 1:
-            corr = np.corrcoef(X_selected.T)
-            corr = np.nan_to_num(corr, nan=0.0)
+            corr = safe_corrcoef(X_selected, axis=0)
             np.fill_diagonal(corr, 0.0)
             adj = np.abs(corr) > self.corr_threshold
             src, dst = np.where(adj)
@@ -252,8 +252,7 @@ class ContrastivePretrainer:
                 relevance[j] = abs(r) if not np.isnan(r) else 0.0
 
         # Feature-feature redundancy: abs pairwise correlation
-        corr = np.corrcoef(X.T)
-        corr = np.nan_to_num(corr, nan=0.0)
+        corr = safe_corrcoef(X, axis=0)
         np.fill_diagonal(corr, 0.0)
         redundancy = np.abs(corr)
 

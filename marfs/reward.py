@@ -10,6 +10,7 @@ Supports two modes:
 import numpy as np
 from sklearn.linear_model import RidgeClassifier
 from sklearn.metrics import accuracy_score, balanced_accuracy_score
+from marfs.utils import safe_corrcoef
 
 
 def compute_reward(
@@ -147,8 +148,7 @@ def _compute_redundancy(X: np.ndarray) -> float:
     """Mean absolute pairwise Pearson correlation between features."""
     if X.shape[1] <= 1:
         return 0.0
-    corr = np.corrcoef(X.T)
-    corr = np.nan_to_num(corr, nan=0.0)
+    corr = safe_corrcoef(X, axis=0)
     np.fill_diagonal(corr, 0.0)
     n = corr.shape[0]
     upper = np.abs(corr[np.triu_indices(n, k=1)])

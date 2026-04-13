@@ -15,8 +15,7 @@ def parse_args():
 
     # Dataset
     parser.add_argument("--dataset", type=str, default="synthetic",
-                        choices=["wdbc", "control", "usps", "isolet", "orl", "yale",
-                                 "coil20", "colon", "covertype", "mnist", "genomics", "synthetic"])
+                        choices=["wdbc", "usps", "isolet", "coil20", "colon", "covertype", "musk", "spambase", "mnist", "genomics", "synthetic"])
     parser.add_argument("--test-size", type=float, default=0.2)
 
     # Agent structure
@@ -81,6 +80,7 @@ def parse_args():
     parser.add_argument("--wandb-project", type=str, default="marfs")
     parser.add_argument("--run-name", type=str, default=None)
     parser.add_argument("--save-dir", type=str, default="results")
+    parser.add_argument("--log-freq", type=int, default=10)
 
     return parser.parse_args()
 
@@ -128,6 +128,7 @@ def main():
         wandb_project=args.wandb_project,
         run_name=args.run_name,
         save_dir=args.save_dir,
+        log_freq=args.log_freq,
     )
 
     trainer = MARFSTrainer(config)
@@ -147,4 +148,6 @@ def main():
 
 
 if __name__ == "__main__":
+    # import logging
+    # logging.basicConfig(level=logging.INFO)
     main()

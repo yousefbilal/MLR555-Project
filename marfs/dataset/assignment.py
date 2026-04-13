@@ -5,6 +5,7 @@ Includes random, K-Means, spectral, and GCN-informed spectral clustering.
 
 import numpy as np
 from sklearn.cluster import KMeans, SpectralClustering
+from marfs.utils import safe_corrcoef
 
 
 def assign_features(X: np.ndarray, n_agents: int, strategy: str = "random",
@@ -50,8 +51,7 @@ def _random_assignment(X: np.ndarray, n_agents: int, seed: int) -> list[list[int
 
 def _kmeans_assignment(X: np.ndarray, n_agents: int, seed: int) -> list[list[int]]:
     """Cluster features using K-Means on the correlation matrix."""
-    corr_matrix = np.corrcoef(X.T)
-    corr_matrix = np.nan_to_num(corr_matrix, nan=0.0)
+    corr_matrix = safe_corrcoef(X, axis=0)
 
     kmeans = KMeans(n_clusters=n_agents, random_state=seed, n_init=10)
     labels = kmeans.fit_predict(corr_matrix)
@@ -62,8 +62,7 @@ def _kmeans_assignment(X: np.ndarray, n_agents: int, seed: int) -> list[list[int
 
 def _spectral_assignment(X: np.ndarray, n_agents: int, seed: int) -> list[list[int]]:
     """Cluster features using Spectral Clustering on the absolute correlation matrix."""
-    corr_matrix = np.corrcoef(X.T)
-    corr_matrix = np.nan_to_num(corr_matrix, nan=0.0)
+    corr_matrix = safe_corrcoef(X, axis=0)
     affinity = np.clip(np.abs(corr_matrix), 0, 1)
     np.fill_diagonal(affinity, 1.0)
 
