@@ -19,7 +19,12 @@ from .dataset import load_dataset, assign_features
 from .models.gcn import GCNStateEncoder, DynamicGraphBuilder, ContrastivePretrainer
 from .models.policy import PPOPolicy
 from .environ.feature_env import GroupedFeatureEnv
-from .metrics import EpisodeMetrics, compute_jaccard_similarity
+from .metrics import EpisodeMetrics, compute_jaccard_similarity, evaluate_final_selection
+
+try:
+    import wandb
+except ImportError:
+    wandb = None
 
 
 class RolloutBuffer:
@@ -189,15 +194,14 @@ class MARFSTrainer:
         # Wandb
         self.wandb_run = None
         if config.use_wandb:
-            try:
-                import wandb
+            if wandb is None:
+                print("wandb not installed, skipping.")
+            else:
                 self.wandb_run = wandb.init(
                     project=config.wandb_project,
                     name=config.run_name,
                     config=vars(config),
                 )
-            except ImportError:
-                print("wandb not installed, skipping.")
 
     def _contrastive_pretrain(self):
         """Run contrastive pre-training on the GCN."""
@@ -439,7 +443,6 @@ class MARFSTrainer:
                       f"FPS={fps:.0f} | {ep_time:.1f}s")
 
             if self.wandb_run:
-                import wandb
                 wandb.log({
                     "episode": episode,
                     "reward": ep_reward,
@@ -461,8 +464,6 @@ class MARFSTrainer:
         return results
 
     def _compile_results(self, best_mask: np.ndarray, total_time: float) -> dict:
-        from .metrics import evaluate_final_selection
-
         if best_mask is None:
             best_mask = np.ones(self.n_features, dtype=np.float32)
 

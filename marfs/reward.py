@@ -137,8 +137,8 @@ def _compute_accuracy(X_train, y_train, X_test, y_test) -> float:
 
         class_counts = np.bincount(y_train)
         imbalance_ratio = class_counts.max() / max(class_counts.min(), 1)
-        if imbalance_ratio > 3:
-            return balanced_accuracy_score(y_test, y_pred)
+        # if imbalance_ratio > 5:
+        #     return balanced_accuracy_score(y_test, y_pred)
         return accuracy_score(y_test, y_pred)
     except Exception:
         return 0.0

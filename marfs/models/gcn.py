@@ -4,6 +4,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from scipy import stats as scipy_stats
+from sklearn.decomposition import PCA
 from torch_geometric.nn import GCNConv, global_mean_pool
 from torch_geometric.data import Data
 from marfs.utils import safe_corrcoef
@@ -16,8 +18,6 @@ class StatDescriptor:
         self.n_components = n_components
 
     def transform(self, X: np.ndarray) -> np.ndarray:
-        from scipy import stats as scipy_stats
-
         descs = []
         for j in range(X.shape[1]):
             col = X[:, j]
@@ -33,7 +33,6 @@ class StatDescriptor:
 
         descs = np.array(descs, dtype=np.float32)
 
-        from sklearn.decomposition import PCA
         if X.shape[0] >= self.n_components and X.shape[1] >= self.n_components:
             pca = PCA(n_components=self.n_components)
             pca.fit(X)
@@ -289,18 +288,82 @@ class ContrastivePretrainer:
         return np.array(pos_pairs) if pos_pairs else np.zeros((0, 2), dtype=int), \
                np.array(neg_pairs) if neg_pairs else np.zeros((0, 2), dtype=int)
 
-    def train(self, X: np.ndarray, y: np.ndarray, device: torch.device,
-              n_epochs: int = 100) -> list[float]:
-        """Run contrastive pre-training.
+    # def train(self, X: np.ndarray, y: np.ndarray, device: torch.device,
+    #           n_epochs: int = 100) -> list[float]:
+    #     """Run contrastive pre-training.
 
-        Returns:
-            List of per-epoch losses.
-        """
-        pos_pairs, neg_pairs = self.compute_pair_labels(X, y)
+    #     Returns:
+    #         List of per-epoch losses.
+    #     """
+    #     pos_pairs, neg_pairs = self.compute_pair_labels(X, y)
 
-        if len(pos_pairs) == 0 and len(neg_pairs) == 0:
-            print("  No contrastive pairs found, skipping pre-training.")
-            return []
+    #     if len(pos_pairs) == 0 and len(neg_pairs) == 0:
+    #         print("  No contrastive pairs found, skipping pre-training.")
+    #         return []
+
+    #     data = self.graph_builder.build_full(X, device)
+    #     losses = []
+
+    #     for epoch in range(n_epochs):
+    #         self.gcn.train()
+    #         self.optimizer.zero_grad()
+
+    #         embeddings = self.gcn.get_embeddings(data)  # (n_features, dim)
+    #         embeddings = F.normalize(embeddings, dim=-1)
+
+    #         loss = torch.tensor(0.0, device=device, requires_grad=True)
+
+    #         # InfoNCE-style loss over positive pairs
+    #         if len(pos_pairs) > 0:
+    #             for pi, pj in pos_pairs:
+    #                 zi = embeddings[pi]
+    #                 zj = embeddings[pj]
+    #                 pos_sim = torch.dot(zi, zj) / self.tau
+
+    #                 # Negatives: all other features
+    #                 all_sims = (embeddings @ zi) / self.tau
+    #                 # Mask out self
+    #                 mask = torch.ones(len(embeddings), device=device, dtype=torch.bool)
+    #                 mask[pi] = False
+    #                 neg_sims = all_sims[mask]
+    #                 logits = torch.cat([pos_sim.unsqueeze(0), neg_sims])
+    #                 labels = torch.zeros(1, dtype=torch.long, device=device)
+    #                 loss = loss + F.cross_entropy(logits.unsqueeze(0), labels)
+
+    #             loss = loss / max(len(pos_pairs), 1)
+
+    #         loss.backward()
+    #         self.optimizer.step()
+    #         losses.append(loss.item())
+
+    #         if epoch % 20 == 0:
+    #             print(f"  Contrastive epoch {epoch}: loss={loss.item():.4f}")
+
+    #     return losses
+    
+    def train(self, X: np.ndarray, y: np.ndarray, 
+          device: torch.device, n_epochs: int = 100) -> list[float]:
+    
+        # Compute correlation matrix (target)
+        corr = safe_corrcoef(X, axis=0)
+        A_target = torch.tensor(
+            np.abs(corr), dtype=torch.float32, device=device
+        )
+        
+        # Compute relevance weights
+        y_float = y.astype(np.float64)
+        relevance = np.zeros(X.shape[1])
+        for j in range(X.shape[1]):
+            col = X[:, j].astype(np.float64)
+            if np.std(col) > 1e-10 and np.std(y_float) > 1e-10:
+                r = np.corrcoef(col, y_float)[0, 1]
+                relevance[j] = abs(r) if not np.isnan(r) else 0.0
+        
+        relevance_t = torch.tensor(relevance, dtype=torch.float32, device=device)
+        # Weight matrix: higher weight for pairs where both features are relevant
+        weight_matrix = torch.outer(relevance_t, relevance_t)
+        # Normalize so weights sum to 1
+        weight_matrix = weight_matrix / (weight_matrix.sum() + 1e-8)
 
         data = self.graph_builder.build_full(X, device)
         losses = []
@@ -309,35 +372,18 @@ class ContrastivePretrainer:
             self.gcn.train()
             self.optimizer.zero_grad()
 
-            embeddings = self.gcn.get_embeddings(data)  # (n_features, dim)
-            embeddings = F.normalize(embeddings, dim=-1)
+            Z = self.gcn.get_embeddings(data)           # (N, dim)
+            Z_norm = F.normalize(Z, dim=-1)             # unit sphere
+            A_pred = Z_norm @ Z_norm.T                  # (N, N) predicted correlations
 
-            loss = torch.tensor(0.0, device=device, requires_grad=True)
-
-            # InfoNCE-style loss over positive pairs
-            if len(pos_pairs) > 0:
-                for pi, pj in pos_pairs:
-                    zi = embeddings[pi]
-                    zj = embeddings[pj]
-                    pos_sim = torch.dot(zi, zj) / self.tau
-
-                    # Negatives: all other features
-                    all_sims = (embeddings @ zi) / self.tau
-                    # Mask out self
-                    mask = torch.ones(len(embeddings), device=device, dtype=torch.bool)
-                    mask[pi] = False
-                    neg_sims = all_sims[mask]
-                    logits = torch.cat([pos_sim.unsqueeze(0), neg_sims])
-                    labels = torch.zeros(1, dtype=torch.long, device=device)
-                    loss = loss + F.cross_entropy(logits.unsqueeze(0), labels)
-
-                loss = loss / max(len(pos_pairs), 1)
+            # Weighted reconstruction loss
+            loss = (weight_matrix * (A_pred - A_target) ** 2).sum()
 
             loss.backward()
             self.optimizer.step()
             losses.append(loss.item())
 
             if epoch % 20 == 0:
-                print(f"  Contrastive epoch {epoch}: loss={loss.item():.4f}")
+                print(f"  Pre-training epoch {epoch}: loss={loss.item():.4f}")
 
         return losses

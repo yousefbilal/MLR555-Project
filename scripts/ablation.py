@@ -7,7 +7,8 @@ import argparse
 import json
 import os
 import sys
-import time
+import traceback
+import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -199,7 +200,6 @@ def run_ablation(args):
                     run_results.append(result)
                 except Exception as e:
                     print(f"  ERROR: {e}")
-                    import traceback
                     traceback.print_exc()
                     continue
 
@@ -215,7 +215,6 @@ def run_ablation(args):
     results_path = os.path.join(save_dir, "ablation_results.json")
 
     def convert(obj):
-        import numpy as np
         if isinstance(obj, (np.integer,)):
             return int(obj)
         if isinstance(obj, (np.floating,)):

@@ -5,6 +5,7 @@ Includes random, K-Means, spectral, and GCN-informed spectral clustering.
 
 import numpy as np
 from sklearn.cluster import KMeans, SpectralClustering
+from sklearn.metrics.pairwise import cosine_similarity
 from marfs.utils import safe_corrcoef
 
 
@@ -84,8 +85,6 @@ def _gcn_spectral_assignment(gcn_embeddings: np.ndarray, n_agents: int,
     correlation graph, capturing higher-order structure that raw pairwise
     correlations miss.
     """
-    from sklearn.metrics.pairwise import cosine_similarity
-
     # Build affinity from embedding similarity
     sim = cosine_similarity(gcn_embeddings)
     sim = np.clip(sim, 0, 1)
