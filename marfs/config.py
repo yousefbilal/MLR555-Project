@@ -42,8 +42,15 @@ class MARFSConfig:
     contrastive_lr: float = 1e-3
     contrastive_tau: float = 0.1
 
+    # --- Exploration ---
+    exploration: str = "entropy"  # "entropy" (Bernoulli + entropy bonus) or "eps_greedy"
+    eps_start: float = 1.0
+    eps_end: float = 0.05
+    eps_decay_episodes: int = 150  # linearly decay epsilon over this many episodes
+
     # --- Reward ---
     reward_type: str = "hierarchical"  # "simple" or "hierarchical"
+    reward_classifier: str = "ridge"  # "ridge", "rf", "lightgbm", "xgboost"
     w_acc: float = 0.6  # weight for accuracy in hierarchical reward
     w_size: float = 0.1  # weight for size penalty
     w_redundancy: float = 0.1  # weight for local redundancy penalty

@@ -7,6 +7,7 @@ import numpy as np
 from sklearn.datasets import fetch_covtype, fetch_openml, load_breast_cancer
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, LabelEncoder
+from imblearn.under_sampling import RandomUnderSampler
 
 from .synthetic import make_synthetic_dataset
 
@@ -41,13 +42,17 @@ def load_dataset(name: str, test_size: float = 0.2, seed: int = 42, max_rows: in
     X, y, feature_names = loaders[name]()
 
     if len(X) > max_rows:
-        rng = np.random.RandomState(seed)
-        idx = rng.choice(len(X), max_rows, replace=False)
-        X, y = X[idx], y[idx]
+        classes, counts = np.unique(y, return_counts=True)
+        n_classes = len(classes)
+        per_class = min(max_rows // n_classes, counts.min())
+        print(f"Undersampling to {per_class} samples per class")
+        rus = RandomUnderSampler(sampling_strategy={c: per_class for c in classes},
+                                 random_state=seed)
+        X, y = rus.fit_resample(X, y)
 
-    if y.dtype.kind not in ("i", "u"):
-        le = LabelEncoder()
-        y = le.fit_transform(y)
+    # XGBoost and LightGBM require labels to be exactly 0, 1, ..., n_classes-1
+    le = LabelEncoder()
+    y = le.fit_transform(y)
 
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=test_size, random_state=seed, stratify=y

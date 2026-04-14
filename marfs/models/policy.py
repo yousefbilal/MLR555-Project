@@ -1,5 +1,6 @@
 """PPO policy network with AdaLN/FiLM/concat conditioning for MARFS."""
 
+import numpy as np
 import torch
 import torch.nn as nn
 from torch.distributions import Bernoulli
@@ -158,6 +159,30 @@ class PPOPolicy(nn.Module):
         else:
             dist = Bernoulli(probs=probs)
             action = dist.sample()
+
+        log_prob = self._log_prob(logits, action)
+        return action, log_prob, value.squeeze(-1)
+
+    def get_action_eps_greedy(self, state: torch.Tensor, emb: torch.Tensor, k: int,
+                              epsilon: float) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Select action using ε-greedy strategy.
+
+        With probability ε: random binary action per feature.
+        With probability 1-ε: greedy action (p > 0.5).
+        Log probs are computed under the Bernoulli for valid PPO ratios.
+
+        Returns:
+            action, log_prob, value (same as get_action).
+        """
+        logits, value = self.forward(state, emb, k=k)
+        probs = torch.sigmoid(logits)
+
+        if np.random.random() < epsilon:
+            # Random binary action
+            action = torch.bernoulli(torch.full_like(probs, 0.5))
+        else:
+            # Greedy
+            action = (probs > 0.5).float()
 
         log_prob = self._log_prob(logits, action)
         return action, log_prob, value.squeeze(-1)

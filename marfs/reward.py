@@ -9,8 +9,10 @@ Supports two modes:
 
 import numpy as np
 from sklearn.linear_model import RidgeClassifier
-from sklearn.metrics import accuracy_score, balanced_accuracy_score
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score
 from marfs.utils import safe_corrcoef
+import warnings
 
 
 def compute_reward(
@@ -56,7 +58,7 @@ def compute_reward(
     X_te = X_test[:, selected]
 
     # Current accuracy
-    acc = _compute_accuracy(X_tr, y_train, X_te, y_test)
+    acc = _compute_accuracy(X_tr, y_train, X_te, y_test, config)
 
     if config.reward_type == "hierarchical":
         return _hierarchical_reward(
@@ -128,15 +130,29 @@ def _hierarchical_reward(acc, prev_accuracy, n_selected, n_features,
     }
 
 
-def _compute_accuracy(X_train, y_train, X_test, y_test) -> float:
-    """Train RidgeClassifier and return accuracy."""
+def _compute_accuracy(X_train, y_train, X_test, y_test, config) -> float:
+    """Train configured classifier and return accuracy."""
     try:
-        clf = RidgeClassifier(alpha=1.0)
-        clf.fit(X_train, y_train)
-        y_pred = clf.predict(X_test)
+        classifier_type = getattr(config, "reward_classifier", "ridge").lower()
+        
+        if classifier_type == "rf":
+            clf = RandomForestClassifier(n_estimators=10, max_depth=5, random_state=config.seed, n_jobs=-1)
+        elif classifier_type == "lightgbm":
+            from lightgbm import LGBMClassifier
+            clf = LGBMClassifier(n_estimators=10, num_leaves=15, verbose=-1, random_state=config.seed)
+        elif classifier_type == "xgboost":
+            from xgboost import XGBClassifier
+            clf = XGBClassifier(n_estimators=50, max_depth=5, verbosity=0, random_state=config.seed, n_jobs=-1)
+        else:
+            clf = RidgeClassifier(alpha=1.0)
+            
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=UserWarning)
+            clf.fit(X_train, y_train)
+            y_pred = clf.predict(X_test)
 
-        class_counts = np.bincount(y_train)
-        imbalance_ratio = class_counts.max() / max(class_counts.min(), 1)
+        # class_counts = np.bincount(y_train)
+        # imbalance_ratio = class_counts.max() / max(class_counts.min(), 1)
         # if imbalance_ratio > 5:
         #     return balanced_accuracy_score(y_test, y_pred)
         return accuracy_score(y_test, y_pred)
