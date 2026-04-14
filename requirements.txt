@@ -1,5 +1,15 @@
-torch>=2.0
-torch-geometric>=2.4
+--extra-index-url https://download.pytorch.org/whl/cu128
+
+--find-links https://data.pyg.org/whl/torch-2.8.0+cu128.html
+# PyG specific dependencies (using the find-links above)
+pyg_lib
+torch_scatter
+torch_sparse
+torch_cluster
+torch_spline_conv
+
+torch==2.8
+torch-geometric==2.7
 torch-scatter
 torch-sparse
 pettingzoo>=1.24
@@ -14,3 +24,6 @@ wandb>=0.15
 pyyaml>=6.0
 tqdm>=4.65
 scipy>=1.11
+lightgbm
+xgboost
+torch_geometric
