@@ -44,7 +44,7 @@ class MARFSConfig:
 
     # --- Reward ---
     reward_type: str = "hierarchical"  # "simple" or "hierarchical"
-    reward_classifier: str = "rf"  # "ridge", "rf", "lightgbm", "xgboost"
+    reward_classifier: str = "lightgbm"  # "ridge", "rf", "lightgbm", "xgboost"
     w_acc: float = 0.8  # weight for accuracy in hierarchical reward
     w_size: float = 0.1  # weight for size penalty
     w_redundancy: float = 0.1  # weight for local redundancy penalty

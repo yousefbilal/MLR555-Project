@@ -127,7 +127,7 @@ def run_ablation(args):
 
     configs_to_run = args.configs.split(",") if args.configs else list(ABLATION_CONFIGS.keys())
     datasets = args.datasets.split(",") if args.datasets else DEFAULT_DATASETS
-    seeds = list(range(args.n_seeds))
+    seeds = SEEDS[:args.n_seeds]
 
     all_results = {}
     total_runs = len(configs_to_run) * len(datasets) * len(seeds)
