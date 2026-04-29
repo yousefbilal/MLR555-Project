@@ -29,6 +29,6 @@ for name, overrides in configs:
     )
     trainer = MARFSTrainer(config)
     results = trainer.train()
-    print(f"  -> Acc={results['downstream_accuracy']:.4f}, Selected={results['n_selected']}/{results['n_features']}")
+    print(f"  -> Acc={results['downstream_rf_accuracy']:.4f}, Selected={results['n_selected']}/{results['n_features']}")
 
 print("\n\nAll configs PASSED!")

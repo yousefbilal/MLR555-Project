@@ -22,19 +22,8 @@ from marfs.metrics import compute_all_metrics
 # Each row isolates one variable from the previous row.
 # -----------------------------------------------------------------------
 ABLATION_CONFIGS = {
-    # A: EAC-FS baseline reimplemented in our framework
-    "A_eacfs_baseline": {
-        "collective_action": True,
-        "global_readout": "mean",
-        "assignment": "random",
-        "conditioning": "concat",
-        "use_local_state": False,
-        "contrastive_pretrain": False,
-        "reward_type": "hierarchical",
-        "description": "EAC-FS baseline: collective action, AE-style, random, independent",
-    },
-    # B: Per-feature binary control (our key departure from EAC-FS)
-    "B_perfeat_binary": {
+    # A: Per-feature binary baseline (global-only readout, random assignment, concat)
+    "A_perfeat_binary": {
         "collective_action": False,
         "global_readout": "mean",
         "assignment": "random",
@@ -42,21 +31,10 @@ ABLATION_CONFIGS = {
         "use_local_state": False,
         "contrastive_pretrain": False,
         "reward_type": "hierarchical",
-        "description": "Per-feature binary action, concat, global-only, random",
+        "description": "Per-feature binary action, global-only readout, random assignment",
     },
-    # C: Add GCN global readout (vs AE-style)
-    "C_gcn_global": {
-        "collective_action": False,
-        "global_readout": "mean",
-        "assignment": "random",
-        "conditioning": "concat",
-        "use_local_state": False,
-        "contrastive_pretrain": False,
-        "reward_type": "hierarchical",
-        "description": "GCN global readout only, concat, random",
-    },
-    # D: Add dual readout (global + local)
-    "D_gcn_dual": {
+    # B: Add dual readout (global + local)
+    "B_dual_readout": {
         "collective_action": False,
         "global_readout": "mean",
         "assignment": "random",
@@ -64,65 +42,65 @@ ABLATION_CONFIGS = {
         "use_local_state": True,
         "contrastive_pretrain": False,
         "reward_type": "hierarchical",
-        "description": "GCN dual readout (global+local), concat, random",
+        "description": "Dual readout (global+local), random assignment, concat",
     },
-    # E: K-Means assignment (vs random)
-    "E_kmeans": {
+    # C: Add contrastive GCN pre-training (kept on for all subsequent rows)
+    "C_pretrain": {
+        "collective_action": False,
+        "global_readout": "mean",
+        "assignment": "random",
+        "conditioning": "concat",
+        "use_local_state": True,
+        "contrastive_pretrain": True,
+        "reward_type": "hierarchical",
+        "description": "+ contrastive GCN pre-training",
+    },
+    # D: K-Means assignment (vs random)
+    "D_kmeans": {
         "collective_action": False,
         "global_readout": "mean",
         "assignment": "kmeans",
         "conditioning": "concat",
         "use_local_state": True,
-        "contrastive_pretrain": False,
+        "contrastive_pretrain": True,
         "reward_type": "hierarchical",
-        "description": "GCN dual, K-Means assignment, concat",
+        "description": "+ K-Means assignment",
     },
-    # F: GCN-informed spectral clustering
-    "F_gcn_spectral": {
+    # E: GCN-informed spectral assignment (now uses pretrained GCN embeddings)
+    "E_gcn_spectral": {
         "collective_action": False,
         "global_readout": "mean",
         "assignment": "gcn_spectral",
         "conditioning": "concat",
         "use_local_state": True,
-        "contrastive_pretrain": False,
+        "contrastive_pretrain": True,
         "reward_type": "hierarchical",
-        "description": "GCN dual, GCN-informed spectral clustering, concat",
+        "description": "+ GCN-spectral assignment (pretrained embeddings)",
     },
-    # G: FiLM conditioning (vs concat)
-    "G_film": {
+    # F: FiLM conditioning (vs concat)
+    "F_film": {
         "collective_action": False,
         "global_readout": "mean",
         "assignment": "gcn_spectral",
         "conditioning": "film",
         "use_local_state": True,
-        "contrastive_pretrain": False,
+        "contrastive_pretrain": True,
         "reward_type": "hierarchical",
-        "description": "GCN dual, GCN-spectral, FiLM conditioning",
+        "description": "+ FiLM conditioning",
     },
-    # H: AdaLN conditioning (vs FiLM)
-    "H_adaln": {
+    # G: AdaLN conditioning (vs FiLM)
+    "G_adaln": {
         "collective_action": False,
         "global_readout": "mean",
         "assignment": "gcn_spectral",
         "conditioning": "adaln",
         "use_local_state": True,
-        "contrastive_pretrain": False,
+        "contrastive_pretrain": True,
         "reward_type": "hierarchical",
-        "description": "GCN dual, GCN-spectral, AdaLN conditioning",
+        "description": "+ AdaLN conditioning",
     },
-    # I: Attention-based global readout (vs mean pooling)
-    "I_attention": {
-        "collective_action": False,
-        "global_readout": "attention",
-        "assignment": "gcn_spectral",
-        "conditioning": "adaln",
-        "use_local_state": True,
-        "contrastive_pretrain": False,
-        "reward_type": "hierarchical",
-        "description": "GCN dual + attention readout, GCN-spectral, AdaLN",
-    },
-    # J: Full system (+ contrastive pre-training)
-    "J_full": {
+    # H: Attention-based global readout (vs mean pooling) — full system
+    "H_attention": {
         "collective_action": False,
         "global_readout": "attention",
         "assignment": "gcn_spectral",
@@ -130,7 +108,7 @@ ABLATION_CONFIGS = {
         "use_local_state": True,
         "contrastive_pretrain": True,
         "reward_type": "hierarchical",
-        "description": "FULL: attention + GCN-spectral + AdaLN + contrastive pre-training",
+        "description": "FULL: + attention readout",
     },
 }
 
@@ -238,7 +216,7 @@ def print_summary_table(all_results: dict):
     for dataset, configs in all_results.items():
         print(f"\nDataset: {dataset}")
         print("-" * 110)
-        header = (f"{'Config':<22} {'Acc(Ridge)':<14} {'Acc(RF)':<14} "
+        header = (f"{'Config':<22} {'Acc(RF)':<14} "
                   f"{'Compress':<12} {'ConvStep':<12} {'Stability':<12} {'Time(s)':<12}")
         print(header)
         print("-" * 110)
@@ -253,7 +231,6 @@ def print_summary_table(all_results: dict):
 
             short_name = config_name[:22]
             row = (f"{short_name:<22} "
-                   f"{fmt('downstream_accuracy'):<14} "
                    f"{fmt('downstream_rf_accuracy'):<14} "
                    f"{fmt('compression'):<12} "
                    f"{fmt('convergence_step'):<12} "

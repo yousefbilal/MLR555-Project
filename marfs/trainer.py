@@ -257,7 +257,7 @@ class MARFSTrainer:
 
         return states, embs, attn_weights
 
-    def _collect_rollout(self, epsilon: float = 0.0) -> tuple[RolloutBuffer, dict]:
+    def _collect_rollout(self) -> tuple[RolloutBuffer, dict]:
         """Collect one episode of experience."""
         buffer = RolloutBuffer()
         obs_dict, infos = self.env.reset(seed=self.config.seed)
@@ -277,14 +277,9 @@ class MARFSTrainer:
                 emb_tensor = embs[agent_id_str]
 
                 with torch.no_grad():
-                    if self.config.exploration == "eps_greedy":
-                        action, log_prob, value = self.policy.get_action_eps_greedy(
-                            state_tensor, emb_tensor, k=k, epsilon=epsilon
-                        )
-                    else:
-                        action, log_prob, value = self.policy.get_action(
-                            state_tensor, emb_tensor, k=k
-                        )
+                    action, log_prob, value = self.policy.get_action(
+                        state_tensor, emb_tensor, k=k
+                    )
 
                 # Pad action for buffer storage
                 if self.config.collective_action:
@@ -362,15 +357,9 @@ class MARFSTrainer:
                 value_loss = nn.functional.mse_loss(values, ret)
                 entropy_loss = -entropy.mean()
 
-                # Zero out entropy bonus when using eps_greedy (exploration is external)
-                entropy_coeff = (
-                    0.0 if self.config.exploration == "eps_greedy"
-                    else self.config.entropy_coeff
-                )
-
                 loss = (policy_loss
                         + self.config.value_loss_coeff * value_loss
-                        + entropy_coeff * entropy_loss)
+                        + self.config.entropy_coeff * entropy_loss)
 
                 self.optimizer_gcn.zero_grad()
                 self.optimizer_policy.zero_grad()
@@ -416,14 +405,7 @@ class MARFSTrainer:
         for episode in range(self.config.n_episodes):
             ep_start = time.time()
 
-            # Compute current epsilon for eps_greedy exploration
-            if self.config.exploration == "eps_greedy":
-                progress = min(episode / max(self.config.eps_decay_episodes, 1), 1.0)
-                epsilon = self.config.eps_start + (self.config.eps_end - self.config.eps_start) * progress
-            else:
-                epsilon = 0.0
-
-            buffer, ep_info = self._collect_rollout(epsilon=epsilon)
+            buffer, ep_info = self._collect_rollout()
             loss_info = self._ppo_update(buffer)
             buffer.clear()
 
@@ -453,12 +435,11 @@ class MARFSTrainer:
 
             if episode % self.config.log_freq == 0 or episode == self.config.n_episodes - 1:
                 fps = ep_info["episode_steps"] / max(ep_time, 1e-6)
-                eps_str = f" | ε={epsilon:.3f}" if self.config.exploration == "eps_greedy" else ""
                 print(f"Ep {episode:4d} | R={ep_reward:+.4f} | "
                       f"Acc={ep_info.get('accuracy', 0):.3f} | "
                       f"Sel={n_selected:4d}/{self.n_features} ({compression:.1%}) | "
                       f"PL={loss_info['policy_loss']:.4f} | "
-                      f"Ent={loss_info['entropy']:.3f}{eps_str} | "
+                      f"Ent={loss_info['entropy']:.3f} | "
                       f"FPS={fps:.0f} | {ep_time:.1f}s")
 
             if self.wandb_run:
@@ -515,7 +496,6 @@ class MARFSTrainer:
             "n_selected": int(best_mask.sum()),
             "n_features": self.n_features,
             "compression": (self.n_features - int(best_mask.sum())) / self.n_features,
-            "downstream_accuracy": eval_results["accuracy"],
             "downstream_rf_accuracy": eval_results["rf_accuracy"],
             "convergence_step": convergence_step,
             "stability": stability,
