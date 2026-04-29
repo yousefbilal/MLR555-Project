@@ -136,13 +136,13 @@ def _compute_accuracy(X_train, y_train, X_test, y_test, config) -> float:
         classifier_type = getattr(config, "reward_classifier", "ridge").lower()
         
         if classifier_type == "rf":
-            clf = RandomForestClassifier(n_estimators=10, max_depth=5, random_state=config.seed, n_jobs=-1)
+            clf = RandomForestClassifier(n_estimators=100, max_depth=5, random_state=config.seed, n_jobs=-1)
         elif classifier_type == "lightgbm":
             from lightgbm import LGBMClassifier
-            clf = LGBMClassifier(n_estimators=10, num_leaves=15, verbose=-1, random_state=config.seed)
+            clf = LGBMClassifier(n_estimators=100, num_leaves=15, verbose=-1, random_state=config.seed)
         elif classifier_type == "xgboost":
             from xgboost import XGBClassifier
-            clf = XGBClassifier(n_estimators=50, max_depth=5, verbosity=0, random_state=config.seed, n_jobs=-1)
+            clf = XGBClassifier(n_estimators=100, max_depth=5, verbosity=0, random_state=config.seed, n_jobs=-1)
         else:
             clf = RidgeClassifier(alpha=1.0)
             
