@@ -114,11 +114,10 @@ ABLATION_CONFIGS = {
 
 # All 9 EAC-FS benchmark datasets
 EACFS_DATASETS = [
-    "wdbc", "control", "usps", "isolet", "orl",
-    "yale", "coil20", "colon", "covertype",
+    "wdbc", "usps", "isolet", "coil20", "colon", "covertype", "musk", "spambase"
 ]
 
-DEFAULT_DATASETS = ["synthetic", "wdbc", "covertype"]
+DEFAULT_DATASETS = ["wdbc", "covertype", "musk", "spambase"]
 SEEDS = [42, 123, 456, 789, 1024]
 
 
