@@ -27,3 +27,4 @@ scipy>=1.11
 lightgbm
 xgboost
 torch_geometric
+imbalanced-learn
