@@ -44,8 +44,8 @@ class MARFSConfig:
 
     # --- Reward ---
     reward_type: str = "hierarchical"  # "simple" or "hierarchical"
-    reward_classifier: str = "ridge"  # "ridge", "rf", "lightgbm", "xgboost"
-    w_acc: float = 0.6  # weight for accuracy in hierarchical reward
+    reward_classifier: str = "rf"  # "ridge", "rf", "lightgbm", "xgboost"
+    w_acc: float = 0.8  # weight for accuracy in hierarchical reward
     w_size: float = 0.1  # weight for size penalty
     w_redundancy: float = 0.1  # weight for local redundancy penalty
     lambda_redundancy: float = 0.1  # for simple reward
@@ -61,12 +61,12 @@ class MARFSConfig:
     gamma: float = 0.99
     gae_lambda: float = 0.95
     max_grad_norm: float = 0.5
-    n_epochs: int = 4
+    n_epochs: int = 10
     mini_batch_size: int = 64
 
     # --- Episode ---
     n_steps_per_episode: int = 500
-    n_episodes: int = 200
+    n_episodes: int = 300
     early_stop_patience: int = 50
     early_stop_epsilon: float = 1e-4
 
