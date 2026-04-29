@@ -24,6 +24,5 @@ trainer = MARFSTrainer(config)
 results = trainer.train()
 
 print(f"\nSmoke test PASSED!")
-print(f"  Accuracy: {results['downstream_accuracy']:.4f}")
 print(f"  RF Accuracy: {results['downstream_rf_accuracy']:.4f}")
 print(f"  Selected: {results['n_selected']}/{results['n_features']}")

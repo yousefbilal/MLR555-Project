@@ -49,14 +49,6 @@ def parse_args():
     parser.add_argument("--contrastive-pretrain", action="store_true")
     parser.add_argument("--contrastive-epochs", type=int, default=100)
 
-    # Exploration
-    parser.add_argument("--exploration", type=str, default="entropy",
-                        choices=["entropy", "eps_greedy"],
-                        help="Exploration strategy: 'entropy' (Bernoulli + entropy bonus) or 'eps_greedy'")
-    parser.add_argument("--eps-start", type=float, default=1.0)
-    parser.add_argument("--eps-end", type=float, default=0.05)
-    parser.add_argument("--eps-decay-episodes", type=int, default=150)
-
     # Reward
     parser.add_argument("--reward-type", type=str, default="hierarchical",
                         choices=["simple", "hierarchical"])
@@ -116,10 +108,6 @@ def main():
         init_strategy=args.init_strategy,
         contrastive_pretrain=args.contrastive_pretrain,
         contrastive_epochs=args.contrastive_epochs,
-        exploration=args.exploration,
-        eps_start=args.eps_start,
-        eps_end=args.eps_end,
-        eps_decay_episodes=args.eps_decay_episodes,
         reward_type=args.reward_type,
         reward_classifier=args.reward_classifier,
         w_acc=args.w_acc,
@@ -153,7 +141,6 @@ def main():
     print("\n" + "=" * 60)
     print("RESULTS SUMMARY")
     print("=" * 60)
-    print(f"  Downstream accuracy (Ridge):  {results['downstream_accuracy']:.4f}")
     print(f"  Downstream accuracy (RF):     {results['downstream_rf_accuracy']:.4f}")
     print(f"  Features selected:            {results['n_selected']}/{results['n_features']}")
     print(f"  Compression ratio:            {results['compression']:.1%}")

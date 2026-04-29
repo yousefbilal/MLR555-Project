@@ -3,7 +3,6 @@
 from dataclasses import dataclass
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.linear_model import RidgeClassifier
 from sklearn.metrics import accuracy_score
 
 
@@ -32,21 +31,16 @@ def evaluate_final_selection(
     """Evaluate a final feature selection on held-out test data."""
     selected = np.where(mask > 0)[0]
     if len(selected) == 0:
-        return {"accuracy": 0.0, "rf_accuracy": 0.0, "n_selected": 0}
+        return {"rf_accuracy": 0.0, "n_selected": 0}
 
     X_tr = X_train[:, selected]
     X_te = X_test[:, selected]
-
-    ridge = RidgeClassifier(alpha=1.0)
-    ridge.fit(X_tr, y_train)
-    ridge_acc = accuracy_score(y_test, ridge.predict(X_te))
 
     rf = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
     rf.fit(X_tr, y_train)
     rf_acc = accuracy_score(y_test, rf.predict(X_te))
 
     return {
-        "accuracy": ridge_acc,
         "rf_accuracy": rf_acc,
         "n_selected": len(selected),
     }
@@ -78,7 +72,7 @@ def compute_all_metrics(results_list: list[dict]) -> dict:
         return {}
 
     keys = [
-        "downstream_accuracy", "downstream_rf_accuracy",
+        "downstream_rf_accuracy",
         "compression", "convergence_step", "stability",
         "total_time", "n_selected", "peak_memory_mb",
     ]

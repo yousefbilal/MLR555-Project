@@ -86,33 +86,26 @@ def plot_accuracy_comparison(results: dict, save_dir: str):
 
     for col, (dataset, configs) in enumerate(results.items()):
         ax = axes[0, col]
-        names, means_ridge, stds_ridge, means_rf, stds_rf = [], [], [], [], []
+        names, means_rf, stds_rf = [], [], []
 
         for config_name, data in configs.items():
             agg = data.get("aggregated", {})
             names.append(config_name.split("_")[0])
-            for key, m_list, s_list in [
-                ("downstream_accuracy", means_ridge, stds_ridge),
-                ("downstream_rf_accuracy", means_rf, stds_rf),
-            ]:
-                if key in agg:
-                    m_list.append(agg[key]["mean"])
-                    s_list.append(agg[key]["std"])
-                else:
-                    m_list.append(0)
-                    s_list.append(0)
+            if "downstream_rf_accuracy" in agg:
+                means_rf.append(agg["downstream_rf_accuracy"]["mean"])
+                stds_rf.append(agg["downstream_rf_accuracy"]["std"])
+            else:
+                means_rf.append(0)
+                stds_rf.append(0)
 
         x = np.arange(len(names))
-        width = 0.35
-        ax.bar(x - width/2, means_ridge, width, yerr=stds_ridge,
-               label="Ridge", capsize=3, color="steelblue")
-        ax.bar(x + width/2, means_rf, width, yerr=stds_rf,
+        ax.bar(x, means_rf, 0.6, yerr=stds_rf,
                label="RF", capsize=3, color="coral")
 
         ax.set_xticks(x)
         ax.set_xticklabels(names, rotation=45, ha="right")
         ax.set_ylabel("Accuracy")
-        ax.set_title(f"Downstream Accuracy — {dataset}")
+        ax.set_title(f"Downstream RF Accuracy — {dataset}")
         ax.legend()
         ax.grid(True, alpha=0.3, axis="y")
 
@@ -223,31 +216,29 @@ def generate_latex_table(results: dict, save_dir: str):
     lines = [
         r"\begin{table*}[t]",
         r"\centering",
-        r"\caption{Ablation study results. Each row (A$\to$J) adds one component. "
-        r"Config~J is the full system.}",
+        r"\caption{Ablation study results. Each row (A$\to$H) adds one component. "
+        r"Config~H is the full system.}",
         r"\label{tab:ablation}",
         r"\resizebox{\textwidth}{!}{%",
-        r"\begin{tabular}{l l " + "c" * 6 + "}",
+        r"\begin{tabular}{l l " + "c" * 5 + "}",
         r"\toprule",
-        r"Config & Key Change & Acc (Ridge) & Acc (RF) & Compression & Conv.\ Step & Stability & Time (s) \\",
+        r"Config & Key Change & Acc (RF) & Compression & Conv.\ Step & Stability & Time (s) \\",
         r"\midrule",
     ]
 
     key_changes = {
-        "A": "EAC-FS baseline",
-        "B": "+ Per-feature binary",
-        "C": "+ GCN global readout",
-        "D": "+ Local readout",
-        "E": "+ K-Means assignment",
-        "F": "+ GCN-spectral assign.",
-        "G": "+ FiLM conditioning",
-        "H": "+ AdaLN conditioning",
-        "I": "+ Attention readout",
-        "J": "+ Contrastive pretrain",
+        "A": "Per-feature binary",
+        "B": "+ Local readout",
+        "C": "+ Contrastive pretrain",
+        "D": "+ K-Means assignment",
+        "E": "+ GCN-spectral assign.",
+        "F": "+ FiLM conditioning",
+        "G": "+ AdaLN conditioning",
+        "H": "+ Attention readout",
     }
 
     for dataset, configs in results.items():
-        lines.append(r"\multicolumn{8}{l}{\textbf{" + dataset.replace("_", r"\_") + r"}} \\")
+        lines.append(r"\multicolumn{7}{l}{\textbf{" + dataset.replace("_", r"\_") + r"}} \\")
         lines.append(r"\midrule")
 
         for config_name, data in configs.items():
@@ -261,7 +252,7 @@ def generate_latex_table(results: dict, save_dir: str):
             short = config_name.split("_")[0]
             change = key_changes.get(short, "---")
             name_tex = config_name.replace("_", r"\_")
-            row = (f"{short} & {change} & {fmt('downstream_accuracy')} & "
+            row = (f"{short} & {change} & "
                    f"{fmt('downstream_rf_accuracy')} & "
                    f"{fmt('compression')} & "
                    f"{fmt('convergence_step')} & "

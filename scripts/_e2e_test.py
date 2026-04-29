@@ -53,7 +53,7 @@ for name, overrides in configs:
         cfg = MARFSConfig(**{**BASE, **overrides})
         trainer = MARFSTrainer(cfg)
         results = trainer.train()
-        print(f"  PASSED | Acc={results['downstream_accuracy']:.4f}, Sel={results['n_selected']}/{results['n_features']}")
+        print(f"  PASSED | Acc={results['downstream_rf_accuracy']:.4f}, Sel={results['n_selected']}/{results['n_features']}")
         passed += 1
     except Exception as e:
         print(f"  FAILED: {e}")

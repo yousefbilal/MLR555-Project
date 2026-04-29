@@ -12,8 +12,16 @@ from imblearn.under_sampling import RandomUnderSampler
 from .synthetic import make_synthetic_dataset
 
 
-def load_dataset(name: str, test_size: float = 0.2, seed: int = 42, max_rows: int = 20000):
+def load_dataset(name: str, test_size: float = 0.2, seed: int = 42,
+                 max_rows: int = 20000, max_imbalance_ratio: float = 3.0):
     """Load and preprocess a dataset.
+
+    Args:
+        max_rows: trigger undersampling only when row count exceeds this.
+        max_imbalance_ratio: cap the largest:smallest class ratio after
+            undersampling. 1.0 = fully balanced, 3.0 = majority class can be
+            up to 3x the minority. Set to a large value (e.g. 1e9) to disable
+            class-level capping and only enforce the row budget.
 
     Returns:
         X_train, X_test, y_train, y_test: numpy arrays
@@ -43,10 +51,28 @@ def load_dataset(name: str, test_size: float = 0.2, seed: int = 42, max_rows: in
 
     if len(X) > max_rows:
         classes, counts = np.unique(y, return_counts=True)
-        n_classes = len(classes)
-        per_class = min(max_rows // n_classes, counts.min())
-        print(f"Undersampling to {per_class} samples per class")
-        rus = RandomUnderSampler(sampling_strategy={c: per_class for c in classes},
+        min_count = int(counts.min())
+
+        # Cap majority classes at ratio * minority; keep minority in full.
+        ratio_cap = max(int(min_count * max_imbalance_ratio), min_count)
+        targets = np.minimum(counts, ratio_cap)
+
+        # Honor the overall row budget by scaling majority classes down further
+        # (never below min_count) if the total still exceeds max_rows.
+        if targets.sum() > max_rows:
+            slack = max_rows - len(classes) * min_count
+            extra = np.maximum(targets - min_count, 0)
+            extra_total = int(extra.sum())
+            if extra_total > 0 and slack > 0:
+                scale = slack / extra_total
+                targets = (min_count + np.floor(extra * scale)).astype(int)
+            else:
+                targets = np.full_like(counts, min_count)
+
+        sampling_strategy = {int(c): int(t) for c, t in zip(classes, targets)}
+        print(f"Undersampling per-class targets: {sampling_strategy} "
+              f"(min={min_count}, ratio_cap={max_imbalance_ratio})")
+        rus = RandomUnderSampler(sampling_strategy=sampling_strategy,
                                  random_state=seed)
         X, y = rus.fit_resample(X, y)
 
