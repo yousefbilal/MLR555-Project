@@ -115,7 +115,7 @@ def _load_usps():
 
 def _load_spambase():
     data = fetch_openml(data_id=1116, as_frame=False, parser="auto")
-    X = data.data.astype(np.float32)
+    X = data.data[:, 1:].astype(np.float32)
     y = data.target
     feature_names = data.feature_names
     return X, y, feature_names

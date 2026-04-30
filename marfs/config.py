@@ -38,7 +38,7 @@ class MARFSConfig:
 
     # --- Contrastive pre-training ---
     contrastive_pretrain: bool = False
-    contrastive_epochs: int = 100
+    contrastive_epochs: int = 500
     contrastive_lr: float = 1e-3
     contrastive_tau: float = 0.1
 
