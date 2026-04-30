@@ -73,6 +73,37 @@ def _mask_from_indices(indices, n_features: int) -> np.ndarray:
     return mask
 
 
+def _parse_k_spec(token: str):
+    """Parse one --k token into ('int', n) or ('frac', f).
+
+    'half'        -> ('frac', 0.5)
+    '0.25', '.5'  -> ('frac', float)
+    '20'          -> ('int',  20)
+    """
+    s = token.strip().lower()
+    if s == "half":
+        return ("frac", 0.5)
+    if "." in s:
+        f = float(s)
+        if not (0 < f <= 1):
+            raise ValueError(f"--k fraction must be in (0, 1], got {token!r}")
+        return ("frac", f)
+    n = int(s)
+    if n <= 0:
+        raise ValueError(f"--k integer must be positive, got {token!r}")
+    return ("int", n)
+
+
+def _resolve_k(spec, n_features: int) -> int:
+    """Apply a parsed k spec against a dataset's feature count."""
+    kind, val = spec
+    if kind == "frac":
+        k = max(1, int(round(val * n_features)))
+    else:
+        k = val
+    return min(k, n_features)
+
+
 def _topk(scores: np.ndarray, k: int, descending: bool = True) -> np.ndarray:
     order = np.argsort(scores)
     if descending:
@@ -219,7 +250,10 @@ def main():
                          "(LASSO), mrmr, rfe_logreg. Pass 'all' to run every "
                          "available method.")
     ap.add_argument("--k", type=str, default="10,20,30",
-                    help="comma-separated target feature counts (caps at n_features)")
+                    help="comma-separated target feature counts. Each entry can be "
+                         "an integer (e.g. 20), a float fraction of n_features "
+                         "(e.g. 0.5), or the literal 'half' (== 0.5). Caps at "
+                         "n_features. Example: --k 10,half,0.25")
     ap.add_argument("--n-seeds", type=int, default=3)
     ap.add_argument("--save-dir", type=str, default="results/baselines")
     args = ap.parse_args()
@@ -247,7 +281,7 @@ def main():
         raise SystemExit(f"No valid methods. Available: {sorted(available.keys())}")
 
     datasets = args.datasets.split(",")
-    ks = [int(x) for x in args.k.split(",")]
+    k_specs = [_parse_k_spec(x) for x in args.k.split(",")]
     seeds = list(range(args.n_seeds))
 
     all_results = {}
@@ -260,16 +294,22 @@ def main():
             print(f"  seed={seed} n_features={n_features} "
                   f"train={len(X_train)} test={len(X_test)}")
 
+            # Resolve k specs against this dataset's feature count, dedupe.
+            ks = []
+            for spec in k_specs:
+                k_resolved = _resolve_k(spec, n_features)
+                if k_resolved not in ks:
+                    ks.append(k_resolved)
+
             for k in ks:
-                k_eff = min(k, n_features)
                 for m in methods:
                     if m == "all" and k != ks[0]:
                         continue  # don't repeat
                     try:
                         r = run_one(m, available[m], X_train, y_train,
-                                    X_test, y_test, k_eff, seed)
+                                    X_test, y_test, k, seed)
                     except Exception as e:
-                        print(f"    {m:<14} k={k_eff:<4} FAILED: {e}")
+                        print(f"    {m:<14} k={k:<4} FAILED: {e}")
                         continue
                     r["dataset"] = ds
                     r["seed"] = seed
