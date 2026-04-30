@@ -50,6 +50,7 @@ class MARFSConfig:
     w_redundancy: float = 0.1  # weight for local redundancy penalty
     lambda_redundancy: float = 0.1  # for simple reward
     lambda_relevance: float = 0.1  # for simple reward
+    reward_cache_size: int = 10000  # 0 disables; LRU cache of accuracy by mask
 
     # --- PPO ---
     lr_gcn: float = 1e-4

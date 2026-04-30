@@ -20,6 +20,7 @@ from .models.gcn import GCNStateEncoder, DynamicGraphBuilder, ContrastivePretrai
 from .models.policy import PPOPolicy
 from .environ.feature_env import GroupedFeatureEnv
 from .metrics import EpisodeMetrics, compute_jaccard_similarity, evaluate_final_selection
+from . import reward as reward_mod
 
 try:
     import wandb
@@ -398,6 +399,10 @@ class MARFSTrainer:
               f"collective={self.config.collective_action}")
         print("-" * 70)
 
+        # Reset reward cache so this run doesn't reuse another trainer's hits
+        reward_mod.configure_cache(self.config.reward_cache_size)
+        reward_mod.clear_cache()
+
         best_reward = -np.inf
         best_mask = None
         start_time = time.time()
@@ -458,6 +463,13 @@ class MARFSTrainer:
         print(f"Best reward: {best_reward:.4f}")
         if best_mask is not None:
             print(f"Best selection: {int(best_mask.sum())}/{self.n_features} features")
+
+        cache_stats = reward_mod.get_cache_stats()
+        if cache_stats["hits"] + cache_stats["misses"] > 0:
+            print(f"Reward cache: {cache_stats['hits']} hits / "
+                  f"{cache_stats['misses']} misses "
+                  f"({cache_stats['hit_rate']:.1%}) | "
+                  f"size={cache_stats['size']}")
 
         results = self._compile_results(best_mask, total_time)
         self._save_results(results)
