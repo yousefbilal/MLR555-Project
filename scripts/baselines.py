@@ -47,7 +47,6 @@ from sklearn.preprocessing import MinMaxScaler
 
 from marfs.dataset import load_dataset
 from marfs.metrics import evaluate_final_selection
-
 try:
     from lightgbm import LGBMClassifier
     LGBM_OK = True
@@ -61,6 +60,12 @@ try:
     SKFEATURE_OK = True
 except Exception:
     SKFEATURE_OK = False
+
+try:
+    from sklearn_genetic import GAFeatureSelectionCV
+    GENETIC_OK = True
+except Exception:
+    GENETIC_OK = False
 
 try:
     import pandas as pd
@@ -180,12 +185,12 @@ def _lap_score(X_train, y_train, k, seed):
     return _mask_from_indices(_topk(-scores, k), X_train.shape[1])  # lower is better
 
 
-def _fisher(X_train, y_train, k, seed):
+def _fisher(X_train, y_train, k, seed, *args):
     scores = fisher_score.fisher_score(X_train, y_train)
     return _mask_from_indices(_topk(scores, k), X_train.shape[1])
 
 
-def _mrmr(X_train, y_train, k, seed):
+def _mrmr(X_train, y_train, k, seed, *args):
     Xdf = pd.DataFrame(X_train, columns=[f"f{i}" for i in range(X_train.shape[1])])
     yser = pd.Series(y_train)
     selected = mrmr_classif(X=Xdf, y=yser, K=k, show_progress=False)
@@ -201,6 +206,23 @@ def _mcfs(X_train, y_train, k, seed):
     scores = (W_mcfs ** 2).max(axis=1)
     return _mask_from_indices(_topk(scores, k), X_train.shape[1])
 
+def _genetic(X_train, y_train, k, seed):
+    clf = LGBMClassifier(n_estimators=50, verbose=-1, random_state=seed)
+
+    selector = GAFeatureSelectionCV(
+        estimator=clf,
+        cv=3,
+        generations=20,
+        scoring="accuracy",
+        n_jobs=-1,
+        max_features=k,
+        verbose=False
+    )
+    selector = selector.fit(X_train, y_train)
+    mask = selector.get_support().astype(np.float32)
+    return mask
+    
+    
 
 SKLEARN_METHODS = {
     "all": _all,
@@ -224,6 +246,9 @@ MRMR_METHODS = {
     "mrmr": _mrmr,
 }
 
+GENETEC_METHODS = {
+    "genetic": _genetic
+}
 
 # ---------------------------------------------------------------------------
 # Driver
@@ -292,6 +317,11 @@ def main():
     else:
         print("[note] mrmr not installed — skipping mrmr.")
         print("       pip install mrmr-selection")
+    if GENETIC_OK:
+        available.update(GENETEC_METHODS)
+    else:
+        print("[note] sklearn-genetic not installed — skipping sklearn-genetic.")
+        print("       pip install sklearn-genetic")
 
     if args.methods.strip().lower() == "all":
         methods = list(available.keys())

@@ -130,7 +130,7 @@ def _load_musk():
 
 def _load_isolet():
     """Isolet Spoken Letter Recognition: 617 features."""
-    data = fetch_openml(id=300, as_frame=False, parser="auto")
+    data = fetch_openml(data_id=300, as_frame=False, parser="auto")
     X = data.data.astype(np.float32)
     y = data.target
     feature_names = [f"feat_{i}" for i in range(X.shape[1])]
@@ -180,9 +180,9 @@ def _load_coil20():
 
 def _load_colon():
     """Colon Cancer Gene Expression: 2000 features, 62 samples."""
-    data = fetch_openml(data_id=45087, as_frame=False, parser="auto")
-    X = data.data.astype(np.float32)
-    y = data.target
+    data = fetch_openml(data_id=45087, as_frame=True, parser="auto")
+    X = data.data.values.astype(np.float32)
+    y = data.target.values
     feature_names = [f"gene_{i}" for i in range(X.shape[1])]
     return X, y, feature_names
 
