@@ -220,3 +220,4 @@ results
 wandb
 .claude
 saved
+*.ipynb
