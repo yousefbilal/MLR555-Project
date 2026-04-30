@@ -37,15 +37,22 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sklearn.feature_selection import (
-    SelectKBest, VarianceThreshold, mutual_info_classif, f_classif, chi2,
+    SelectKBest, mutual_info_classif, f_classif, chi2,
     SelectFromModel, RFE,
 )
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score
 from sklearn.preprocessing import MinMaxScaler
 
 from marfs.dataset import load_dataset
 from marfs.metrics import evaluate_final_selection
+
+try:
+    from lightgbm import LGBMClassifier
+    LGBM_OK = True
+except Exception:
+    LGBM_OK = False
 
 try:
     from skfeature.function.similarity_based import lap_score, fisher_score
@@ -147,8 +154,6 @@ def _chi2(X_train, y_train, k, seed):
 
 
 def _l1_logreg(X_train, y_train, k, seed):
-    # saga supports L1 + multiclass natively (liblinear is binary-only and
-    # raises on n_classes >= 3). saga is slower but is the right solver here.
     base = LogisticRegression(penalty="l1", solver="saga",
                               C=0.1, random_state=seed, max_iter=2000,
                               tol=1e-3)
@@ -232,14 +237,30 @@ def run_one(method_name, fn, X_train, y_train, X_test, y_test, k, seed):
     fit_time = time.time() - t0
 
     eval_result = evaluate_final_selection(X_train, y_train, X_test, y_test, mask)
+
+    lgbm_acc = None
+    if LGBM_OK:
+        selected = np.where(mask > 0)[0]
+        if len(selected) > 0:
+            try:
+                clf = LGBMClassifier(n_estimators=50, verbose=-1, random_state=seed)
+                # with warnings.catch_warnings():
+                #     warnings.simplefilter("ignore")
+                clf.fit(X_train[:, selected], y_train)
+                lgbm_acc = float(accuracy_score(y_test, clf.predict(X_test[:, selected])))
+            except Exception:
+                pass
+
     return {
         "method": method_name,
         "k": int(mask.sum()),
         "k_target": k,
         "rf_accuracy": eval_result["rf_accuracy"],
+        "lgbm_accuracy": lgbm_acc,
         "fit_time": fit_time,
     }
 
+SEEDS = [42, 123, 456, 789, 1024]
 
 def main():
     ap = argparse.ArgumentParser()
@@ -282,7 +303,7 @@ def main():
 
     datasets = args.datasets.split(",")
     k_specs = [_parse_k_spec(x) for x in args.k.split(",")]
-    seeds = list(range(args.n_seeds))
+    seeds = SEEDS[:args.n_seeds]
 
     all_results = {}
     for ds in datasets:
@@ -313,8 +334,9 @@ def main():
                         continue
                     r["dataset"] = ds
                     r["seed"] = seed
+                    lgbm_str = f"  lgbm={r['lgbm_accuracy']:.4f}" if r["lgbm_accuracy"] is not None else ""
                     print(f"    {m:<14} k={r['k']:<4} "
-                          f"acc={r['rf_accuracy']:.4f}  ({r['fit_time']:.2f}s)")
+                          f"acc={r['rf_accuracy']:.4f}{lgbm_str}  ({r['fit_time']:.2f}s)")
                     all_results[ds].append(r)
 
     out_path = os.path.join(args.save_dir, "baselines.json")
@@ -331,15 +353,17 @@ def print_summary(all_results):
     print("=" * 78)
     for ds, runs in all_results.items():
         print(f"\n{ds}")
-        print(f"  {'method':<14} {'k':<6} {'acc':<18} {'time(s)':<10}")
+        print(f"  {'method':<14} {'k':<6} {'rf_acc':<18} {'lgbm_acc':<18} {'time(s)':<10}")
         agg = {}
         for r in runs:
             agg.setdefault((r["method"], r["k_target"]), []).append(r)
         for (m, k), rs in sorted(agg.items()):
             accs = np.array([x["rf_accuracy"] for x in rs])
             ts = np.array([x["fit_time"] for x in rs])
+            lgbm_vals = [x["lgbm_accuracy"] for x in rs if x["lgbm_accuracy"] is not None]
+            lgbm_str = f"{np.mean(lgbm_vals):.4f}±{np.std(lgbm_vals):.4f}" if lgbm_vals else "N/A"
             print(f"  {m:<14} {k:<6} {accs.mean():.4f}±{accs.std():.4f}   "
-                  f"{ts.mean():.2f}")
+                  f"{lgbm_str:<18} {ts.mean():.2f}")
 
 
 if __name__ == "__main__":
