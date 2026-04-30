@@ -7,12 +7,57 @@ Supports two modes:
     r_local_j = -w_d·Redundancy(F_j)
 """
 
+from collections import OrderedDict
+
 import numpy as np
 from sklearn.linear_model import RidgeClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score
 from marfs.utils import safe_corrcoef
 import warnings
+
+
+# ---------------------------------------------------------------------------
+# Accuracy cache
+# ---------------------------------------------------------------------------
+# The reward function is called once per (env step, agent), and many of those
+# calls share the same global mask (all agents in a step) or repeat masks the
+# policy has already evaluated. We memoize accuracy by mask bytes. The cache
+# is keyed on (mask, classifier_type, X_train_id, n_train) so it's implicitly
+# scoped to a trainer run — a fresh trainer gets a fresh array (new id) and
+# therefore disjoint cache entries.
+
+_ACC_CACHE: "OrderedDict[tuple, float]" = OrderedDict()
+_CACHE_MAX = 10_000
+_CACHE_HITS = 0
+_CACHE_MISSES = 0
+
+
+def configure_cache(max_size: int) -> None:
+    """Set cache capacity. max_size <= 0 disables caching."""
+    global _CACHE_MAX
+    _CACHE_MAX = int(max_size)
+    if _CACHE_MAX <= 0:
+        _ACC_CACHE.clear()
+
+
+def clear_cache() -> None:
+    """Drop all cached entries and reset hit/miss counters."""
+    global _CACHE_HITS, _CACHE_MISSES
+    _ACC_CACHE.clear()
+    _CACHE_HITS = 0
+    _CACHE_MISSES = 0
+
+
+def get_cache_stats() -> dict:
+    """Return current hit/miss counts and cache size."""
+    total = _CACHE_HITS + _CACHE_MISSES
+    return {
+        "hits": _CACHE_HITS,
+        "misses": _CACHE_MISSES,
+        "size": len(_ACC_CACHE),
+        "hit_rate": (_CACHE_HITS / total) if total else 0.0,
+    }
 
 
 def compute_reward(
@@ -57,8 +102,8 @@ def compute_reward(
     X_tr = X_train[:, selected]
     X_te = X_test[:, selected]
 
-    # Current accuracy
-    acc = _compute_accuracy(X_tr, y_train, X_te, y_test, config)
+    # Current accuracy (cached by mask + classifier + dataset identity)
+    acc = _accuracy_cached(mask, X_tr, y_train, X_te, y_test, X_train, config)
 
     if config.reward_type == "hierarchical":
         return _hierarchical_reward(
@@ -128,6 +173,41 @@ def _hierarchical_reward(acc, prev_accuracy, n_selected, n_features,
         "accuracy": float(acc),
         "n_selected": n_selected,
     }
+
+
+def _accuracy_cached(mask: np.ndarray, X_tr, y_train, X_te, y_test,
+                     X_train_full, config) -> float:
+    """Memoize _compute_accuracy by mask bytes + classifier + dataset identity.
+
+    Key includes id(X_train_full) and len(y_train) so two trainers running in
+    the same process don't collide. Bypasses the cache if size <= 0.
+    """
+    global _CACHE_HITS, _CACHE_MISSES
+
+    if _CACHE_MAX <= 0:
+        return _compute_accuracy(X_tr, y_train, X_te, y_test, config)
+
+    classifier_type = getattr(config, "reward_classifier", "ridge").lower()
+    key = (
+        mask.astype(np.uint8, copy=False).tobytes(),
+        classifier_type,
+        id(X_train_full),
+        int(len(y_train)),
+        int(getattr(config, "seed", 0)),
+    )
+
+    cached = _ACC_CACHE.get(key)
+    if cached is not None:
+        _CACHE_HITS += 1
+        _ACC_CACHE.move_to_end(key)  # LRU touch
+        return cached
+
+    _CACHE_MISSES += 1
+    acc = _compute_accuracy(X_tr, y_train, X_te, y_test, config)
+    _ACC_CACHE[key] = acc
+    if len(_ACC_CACHE) > _CACHE_MAX:
+        _ACC_CACHE.popitem(last=False)  # drop oldest
+    return acc
 
 
 def _compute_accuracy(X_train, y_train, X_test, y_test, config) -> float:
